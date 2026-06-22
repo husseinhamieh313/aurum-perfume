@@ -37,7 +37,7 @@ npm install
 node index.js
 ```
 
-Server runs on → **http://localhost:5000**
+Server runs on → **http://localhost:5555**
 
 > **Default DB credentials** (edit `server/db.js` if needed):
 > - Host: `localhost`

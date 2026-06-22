@@ -19,10 +19,11 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
-    localStorage.setItem('aurum_token', data.token);
+    localStorage.setItem('aurum_token',data.token);
     localStorage.setItem('aurum_user', JSON.stringify(data.user));
     setUser(data.user);
     return data.user;
+    console.log("LOGIN RESPONSE:", data);
   };
 
   const register = async (name, email, password) => {
@@ -31,7 +32,8 @@ export function AuthProvider({ children }) {
     localStorage.setItem('aurum_user', JSON.stringify(data.user));
     setUser(data.user);
     return data.user;
-  };
+   
+  }
 
   const logout = () => {
     localStorage.removeItem('aurum_token');
