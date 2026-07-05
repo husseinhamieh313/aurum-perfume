@@ -1,10 +1,11 @@
 const mysql = require('mysql2/promise');
+const config = require('./config');
 
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASS || '',
-  database: process.env.DB_NAME || 'aurum_db',
+  host: config.DB_HOST,
+  user: config.DB_USER,
+  password: config.DB_PASS,
+  database: config.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
 });

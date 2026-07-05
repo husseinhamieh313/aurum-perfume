@@ -98,10 +98,49 @@ function ScentProfileSliders({ profile, onChange }) {
   );
 }
 
+/* ── REVENUE MINI CHART (pure SVG, no deps) ── */
+function RevenueChart({ orders }) {
+  const months = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date(); d.setMonth(d.getMonth() - (5 - i));
+    return { key: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`, label: d.toLocaleString('en-US',{month:'short'}) };
+  });
+  const byMonth = {};
+  orders.forEach(o => {
+    const key = (o.created || '').slice(0,7);
+    byMonth[key] = (byMonth[key] || 0) + parseFloat(o.total || 0);
+  });
+  const vals = months.map(m => byMonth[m.key] || 0);
+  const maxVal = Math.max(...vals, 1);
+  const W = 420, H = 120, pad = 10;
+  const pts = vals.map((v, i) => ({ x: pad + (i / (vals.length-1)) * (W - pad*2), y: H - pad - (v/maxVal)*(H - pad*2) }));
+  const line = pts.map((p,i) => `${i===0?'M':'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const area = `${line} L${pts[pts.length-1].x},${H} L${pts[0].x},${H} Z`;
+  return (
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 120 }}>
+        <defs>
+          <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#C9A84C" stopOpacity="0.25"/>
+            <stop offset="100%" stopColor="#C9A84C" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        <path d={area} fill="url(#rg)" />
+        <path d={line} fill="none" stroke="#C9A84C" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        {pts.map((p,i) => (<circle key={i} cx={p.x} cy={p.y} r="3.5" fill="#C9A84C" />))}
+      </svg>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '.3rem' }}>
+        {months.map((m,i) => (<div key={m.key} style={{ textAlign: 'center', flex: 1 }}><div style={{ fontSize: '.58rem', color: 'var(--gray)', marginBottom: '.1rem' }}>{m.label}</div><div style={{ fontSize: '.65rem', color: gold }}>${vals[i].toFixed(0)}</div></div>))}
+      </div>
+    </div>
+  );
+}
+
 /* ── OVERVIEW PANEL ── */
 function OverviewPanel({ products, brands, orders, users, messages }) {
   const revenue = orders.reduce((s, o) => s + parseFloat(o.total || 0), 0);
   const unread = messages.filter(m => !m.is_read).length;
+  const lowStock = products.filter(p => p.stock > 0 && p.stock <= 10).sort((a,b) => a.stock - b.stock);
+  const outOfStock = products.filter(p => p.stock === 0);
   const stats = [
     { icon: '🧴', label: 'Products', value: products.length },
     { icon: '🏷️', label: 'Brands', value: brands.length },
@@ -112,7 +151,9 @@ function OverviewPanel({ products, brands, orders, users, messages }) {
   return (
     <div>
       <div style={{ marginBottom: '2rem' }}><h1 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '2.2rem', fontWeight: 300 }}>Dashboard</h1><p style={{ color: 'var(--gray)', fontSize: '.8rem', marginTop: '.2rem' }}>Welcome back — here's your store overview.</p></div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '1.2rem', marginBottom: '2rem' }}>
+
+      {/* Stat cards */}
+      <div className="admin-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '1.2rem', marginBottom: '1.5rem' }}>
         {stats.map(s => (
           <div key={s.label} style={{ background: dark2, border: '1px solid rgba(201,168,76,.14)', padding: '1.4rem', position: 'relative', overflow: 'hidden', transition: 'all .3s' }}
             onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(201,168,76,.4)'; e.currentTarget.style.transform = 'translateY(-3px)'; }}
@@ -123,29 +164,75 @@ function OverviewPanel({ products, brands, orders, users, messages }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem' }}>
+
+      {/* Low stock alert */}
+      {(lowStock.length > 0 || outOfStock.length > 0) && (
+        <div style={{ background: 'rgba(192,57,43,.08)', border: '1px solid rgba(192,57,43,.3)', padding: '1.2rem 1.5rem', marginBottom: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem', marginBottom: '.8rem' }}>
+            <span style={{ fontSize: '1.1rem' }}>⚠️</span>
+            <span style={{ fontSize: '.75rem', color: '#e74c3c', letterSpacing: '.1em', textTransform: 'uppercase', fontWeight: 500 }}>Stock Alerts</span>
+          </div>
+          <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
+            {outOfStock.length > 0 && (
+              <div>
+                <div style={{ fontSize: '.65rem', color: '#e74c3c', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '.4rem' }}>Out of Stock ({outOfStock.length})</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem' }}>
+                  {outOfStock.slice(0, 6).map(p => <span key={p.id} style={{ background: 'rgba(192,57,43,.15)', color: '#e74c3c', fontSize: '.68rem', padding: '.15rem .5rem', border: '1px solid rgba(192,57,43,.25)' }}>{p.name}</span>)}
+                  {outOfStock.length > 6 && <span style={{ color: '#e74c3c', fontSize: '.68rem' }}>+{outOfStock.length - 6} more</span>}
+                </div>
+              </div>
+            )}
+            {lowStock.length > 0 && (
+              <div>
+                <div style={{ fontSize: '.65rem', color: '#f39c12', letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '.4rem' }}>Low Stock ({lowStock.length})</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem' }}>
+                  {lowStock.slice(0, 6).map(p => <span key={p.id} style={{ background: 'rgba(243,156,18,.12)', color: '#f39c12', fontSize: '.68rem', padding: '.15rem .5rem', border: '1px solid rgba(243,156,18,.25)' }}>{p.name} ({p.stock})</span>)}
+                  {lowStock.length > 6 && <span style={{ color: '#f39c12', fontSize: '.68rem' }}>+{lowStock.length - 6} more</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="admin-two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.2rem', marginBottom: '1.2rem' }}>
+        {/* Revenue chart */}
+        <div style={{ background: dark2, border: '1px solid rgba(201,168,76,.14)', padding: '1.8rem' }}>
+          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.3rem', color: gold, marginBottom: '.3rem', paddingBottom: '.8rem', borderBottom: '1px solid rgba(201,168,76,.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+            Revenue <span style={{ fontSize: '.75rem', color: 'var(--gray)', fontFamily: "'Jost',sans-serif", fontWeight: 300 }}>Last 6 months</span>
+          </div>
+          <div style={{ marginTop: '1rem' }}><RevenueChart orders={orders} /></div>
+        </div>
+
+        {/* Recent orders */}
         <div style={{ background: dark2, border: '1px solid rgba(201,168,76,.14)', padding: '1.8rem' }}>
           <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.3rem', color: gold, marginBottom: '1.4rem', paddingBottom: '.8rem', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Recent Orders</div>
           {orders.length === 0 ? <div style={{ color: 'var(--gray)', fontSize: '.83rem' }}>No orders yet</div> : [...orders].slice(0, 5).map(o => (
-            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '.7rem 0', borderBottom: '1px solid rgba(255,255,255,.04)', fontSize: '.83rem' }}>
-              <span style={{ color: gold, fontFamily: "'Cormorant Garamond',serif" }}>{o.id}</span>
-              <span style={{ color: 'var(--light-gray)' }}>{o.customer}</span>
-              <span style={{ color: gold }}>${parseFloat(o.total).toFixed(2)}</span>
+            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '.7rem 0', borderBottom: '1px solid rgba(255,255,255,.04)', fontSize: '.83rem', gap: '.5rem' }}>
+              <span style={{ color: gold, fontFamily: "'Cormorant Garamond',serif", flexShrink: 0 }}>{o.id}</span>
+              <span style={{ color: 'var(--light-gray)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.customer}</span>
+              <span className={`tag tag-${(o.status||'confirmed').toLowerCase()}`}>{o.status}</span>
+              <span style={{ color: gold, flexShrink: 0 }}>${parseFloat(o.total).toFixed(0)}</span>
             </div>
           ))}
         </div>
-        <div style={{ background: dark2, border: '1px solid rgba(201,168,76,.14)', padding: '1.8rem' }}>
-          <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.3rem', color: gold, marginBottom: '1.4rem', paddingBottom: '.8rem', borderBottom: '1px solid rgba(201,168,76,.12)' }}>Messages {unread > 0 && <span style={{ background: gold, color: 'var(--black)', borderRadius: 10, padding: '0 7px', fontSize: '.65rem', marginLeft: '.5rem' }}>{unread}</span>}</div>
-          {messages.length === 0 ? <div style={{ color: 'var(--gray)', fontSize: '.83rem' }}>No messages yet</div> : [...messages].slice(0, 5).map(m => (
-            <div key={m.id} style={{ padding: '.7rem 0', borderBottom: '1px solid rgba(255,255,255,.04)', borderLeft: m.is_read ? 'none' : `3px solid ${gold}`, paddingLeft: m.is_read ? 0 : '.8rem' }}>
+      </div>
+
+      {/* Messages */}
+      <div style={{ background: dark2, border: '1px solid rgba(201,168,76,.14)', padding: '1.8rem' }}>
+        <div style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '1.3rem', color: gold, marginBottom: '1.4rem', paddingBottom: '.8rem', borderBottom: '1px solid rgba(201,168,76,.12)' }}>
+          Messages {unread > 0 && <span style={{ background: gold, color: 'var(--black)', borderRadius: 10, padding: '0 7px', fontSize: '.65rem', marginLeft: '.5rem' }}>{unread}</span>}
+        </div>
+        {messages.length === 0 ? <div style={{ color: 'var(--gray)', fontSize: '.83rem' }}>No messages yet</div>
+          : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: '.8rem' }}>{[...messages].slice(0, 4).map(m => (
+            <div key={m.id} style={{ padding: '.8rem', background: dark3, borderLeft: `3px solid ${!m.is_read ? gold : 'rgba(201,168,76,.1)'}` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.83rem' }}>
                 <span style={{ color: gold }}>{m.name}</span>
                 <span style={{ color: 'var(--gray)', fontSize: '.72rem' }}>{m.created}</span>
               </div>
-              <div style={{ color: 'var(--gray)', fontSize: '.75rem', marginTop: '.2rem' }}>{m.subject || m.message?.slice(0, 50)}</div>
+              <div style={{ color: 'var(--gray)', fontSize: '.75rem', marginTop: '.2rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.subject || m.message?.slice(0, 60)}</div>
             </div>
-          ))}
-        </div>
+          ))}</div>}
       </div>
     </div>
   );
@@ -493,7 +580,20 @@ function OrdersPanel({ orders, onRefresh, toast }) {
                     <td style={{ padding: '.88rem 1.2rem', borderBottom: '1px solid rgba(255,255,255,.04)', color: gold, fontSize: '.88rem' }}>${parseFloat(o.total).toFixed(2)}</td>
                     <td style={{ padding: '.88rem 1.2rem', borderBottom: '1px solid rgba(255,255,255,.04)', fontSize: '.83rem', color: 'var(--gray)' }}>{o.created}</td>
                     <td style={{ padding: '.88rem 1.2rem', borderBottom: '1px solid rgba(255,255,255,.04)', fontSize: '.83rem', color: 'var(--gray)', textTransform: 'capitalize' }}>{o.payment}</td>
-                    <td style={{ padding: '.88rem 1.2rem', borderBottom: '1px solid rgba(255,255,255,.04)' }}><span className="tag tag-confirmed">{o.status}</span></td>
+                    <td style={{ padding: '.6rem 1.2rem', borderBottom: '1px solid rgba(255,255,255,.04)' }}>
+                      <select
+                        value={o.status}
+                        onChange={async e => {
+                          try {
+                            await api.put(`/orders/${o.id}/status`, { status: e.target.value });
+                            toast(`Order ${o.id} → ${e.target.value}`, 'success');
+                            onRefresh();
+                          } catch { toast('Status update failed', 'error'); }
+                        }}
+                        style={{ background: 'var(--dark3)', border: '1px solid rgba(201,168,76,.2)', color: 'var(--white)', fontFamily: "'Jost',sans-serif", fontSize: '.72rem', padding: '.3rem .5rem', cursor: 'pointer', outline: 'none' }}>
+                        {['Confirmed','Processing','Shipped','Delivered','Cancelled'].map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </td>
                   </tr>
                 );
               })}
@@ -643,6 +743,121 @@ function UsersPanel({ users, onRefresh, toast }) {
   );
 }
 
+/* ── AI ASSISTANT PANEL (employee chat with Claude) ── */
+function AIAssistantPanel({ toast }) {
+  const [messages, setMessages] = useState([
+    { role: 'assistant', content: "Hi! I'm the AURUM Store Assistant. Ask me about sales, low stock, recent orders, or anything else about running the store — I can also help draft customer replies or product descriptions." }
+  ]);
+  const [input, setInput] = useState('');
+  const [sending, setSending] = useState(false);
+  const scrollRef = React.useRef(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, sending]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+    const userMsg = { role: 'user', content: text };
+    const history = messages
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .map(m => ({ role: m.role, content: m.content }));
+
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setSending(true);
+    try {
+      const { data } = await api.post('/ai/ask', { message: text, history });
+      setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
+    } catch (err) {
+      const errMsg = err.response?.data?.error || 'Something went wrong reaching the AI assistant.';
+      setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ ${errMsg}`, isError: true }]);
+      toast(errMsg, 'error');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleKeyDown = e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+  };
+
+  const quickPrompts = [
+    'What products are low on stock?',
+    'Summarize today\'s orders',
+    'Draft a reply to a customer asking about shipping times',
+    'Suggest a product description for a new oud fragrance',
+  ];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 150px)' }}>
+      <div style={{ marginBottom: '1.2rem' }}>
+        <h1 style={{ fontFamily: "'Cormorant Garamond',serif", fontSize: '2.2rem', fontWeight: 300 }}>AI Assistant</h1>
+        <p style={{ color: 'var(--gray)', fontSize: '.8rem' }}>Ask Claude anything about the store — it has live access to your products, stock, and orders.</p>
+      </div>
+
+      {/* Chat window */}
+      <div style={{ flex: 1, background: dark2, border: '1px solid rgba(201,168,76,.14)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {messages.map((m, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: m.role === 'user' ? 'flex-end' : 'flex-start' }}>
+              <div style={{
+                maxWidth: '75%',
+                background: m.role === 'user' ? 'rgba(201,168,76,.12)' : (m.isError ? 'rgba(192,57,43,.1)' : dark3),
+                border: `1px solid ${m.role === 'user' ? 'rgba(201,168,76,.3)' : (m.isError ? 'rgba(192,57,43,.3)' : 'rgba(201,168,76,.1)')}`,
+                padding: '.85rem 1.1rem',
+                fontSize: '.85rem',
+                lineHeight: 1.65,
+                color: m.isError ? '#e74c3c' : 'var(--white)',
+                whiteSpace: 'pre-wrap',
+              }}>
+                {m.role === 'assistant' && !m.isError && (
+                  <div style={{ fontSize: '.62rem', color: gold, letterSpacing: '.1em', textTransform: 'uppercase', marginBottom: '.4rem' }}>🤖 Assistant</div>
+                )}
+                {m.content}
+              </div>
+            </div>
+          ))}
+          {sending && (
+            <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+              <div style={{ background: dark3, border: '1px solid rgba(201,168,76,.1)', padding: '.85rem 1.1rem', fontSize: '.82rem', color: 'var(--gray)' }}>
+                <span style={{ display: 'inline-block', animation: 'pulse 1.4s infinite' }}>Thinking…</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Quick prompts */}
+        {messages.length <= 1 && (
+          <div style={{ padding: '0 1.5rem 1rem', display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
+            {quickPrompts.map(q => (
+              <button key={q} onClick={() => setInput(q)} style={{ background: 'rgba(201,168,76,.06)', border: '1px solid rgba(201,168,76,.2)', color: 'var(--light-gray)', padding: '.4rem .8rem', fontSize: '.7rem', cursor: 'pointer', fontFamily: "'Jost',sans-serif", transition: 'all .2s' }}
+                onMouseEnter={e => e.currentTarget.style.borderColor = gold}
+                onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(201,168,76,.2)'}>{q}</button>
+            ))}
+          </div>
+        )}
+
+        {/* Input */}
+        <div style={{ borderTop: '1px solid rgba(201,168,76,.12)', padding: '1rem 1.5rem', display: 'flex', gap: '.8rem', alignItems: 'flex-end' }}>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask about sales, stock, orders, or request help drafting something…"
+            className="textarea-input"
+            style={{ flex: 1, minHeight: 44, maxHeight: 120, resize: 'vertical', fontSize: '.85rem' }}
+          />
+          <button className="btn-primary" onClick={send} disabled={sending || !input.trim()} style={{ padding: '.85rem 1.6rem', whiteSpace: 'nowrap' }}>
+            {sending ? '…' : 'Send'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── PAYMENT SETTINGS PANEL ── */
 function PaymentsPanel({ toast }) {
   const [settings, setSettings] = useState(null);
@@ -728,6 +943,7 @@ export default function AdminDashboard() {
     { key: 'orders',    icon: '📦', label: 'Orders' },
     { key: 'messages',  icon: '✉️', label: 'Messages', badge: unreadMsgs },
     { key: 'sitereviews', icon: '⭐', label: 'Site Reviews' },
+    { key: 'ai',        icon: '🤖', label: 'AI Assistant' },
     { key: 'users',     icon: '👥', label: 'Users' },
     { key: 'payments',  icon: '💳', label: 'Payments' },
   ];
@@ -788,6 +1004,7 @@ export default function AdminDashboard() {
         {panel === 'orders'    && <OrdersPanel orders={data.orders} onRefresh={fetchAll} toast={showToast} />}
         {panel === 'messages'  && <MessagesPanel messages={data.messages} onRefresh={fetchAll} toast={showToast} />}
         {panel === 'sitereviews' && <SiteReviewsPanel toast={showToast} />}
+        {panel === 'ai'        && <AIAssistantPanel toast={showToast} />}
         {panel === 'users'     && <UsersPanel users={data.users} onRefresh={fetchAll} toast={showToast} />}
         {panel === 'payments'  && <PaymentsPanel toast={showToast} />}
       </div>

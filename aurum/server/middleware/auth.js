@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const SECRET = process.env.JWT_SECRET || 'aurum_secret_2024';
+const config = require('../config');
+const SECRET = config.JWT_SECRET;
 
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.split(' ')[1];

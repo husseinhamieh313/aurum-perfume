@@ -5,6 +5,7 @@ import './index.css';
 
 import StoreFront from './pages/StoreFront';
 import CheckoutPage from './pages/CheckoutPage';
+import TrackOrderPage from './pages/TrackOrderPage';
 import AdminDashboard from './pages/AdminDashboard';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -22,6 +23,7 @@ export default function App() {
         <Routes>
           <Route path="/*" element={<StoreFront />} />
           <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/track" element={<TrackOrderPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/admin/*" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
